@@ -131,12 +131,12 @@ startup {
 	};
 	vars.CalcModuleHash = CalcModuleHash;
 	
-	settings.Add("autotimer", false, "Automatically start/stop timer?");
-	settings.SetToolTip("autotimer", "Automatically starts the timer during the egg break scene and resets it if you return to the title screen");
+	settings.Add("split_goal", false, "Split on Goal Spring");
+	settings.SetToolTip("split_goal", "Split when landing on a goal spring, even if that goal has been taken before.\n\nTakes priority over splitting on clearing a level if both are on.");
 	
-	settings.Add("autosplit", true, "Automatically split on level completion?");
-    settings.SetToolTip("autosplit", "Splits when you successfully complete a level (not when exiting via pause menu)");
-
+	settings.Add("split_completion", true, "Split on Clearing Level");
+	settings.SetToolTip("split_completion", "Split when a level exit is opened on the world map. Will not split a second time if a goal spring is taken for a second time. Will split for the regular and secret exits for levels.\n\nIf 'Split on Goal Spring' is on, this is disabled.");
+	
 	vars.clearedExits = new bool[200];
 	vars.firstUpdate = true;
 	
@@ -184,7 +184,7 @@ exit {
 }
 
 start {
-	if (! settings["autotimer"])
+	if (! settings.StartEnabled)
 		return false;
 		
 	// 204 is the Home level used for the opening cutscene.
@@ -192,7 +192,7 @@ start {
 }
 
 reset {
-	if (! settings["autotimer"])
+	if (! settings.ResetEnabled)
 		return false;
 		
 	// 0 == title screen, 1 == file select.
@@ -200,39 +200,70 @@ reset {
 }
 
 split {
-    if (!settings["autosplit"])
+    if (! settings.SplitEnabled)
         return false;
+	
+	if (settings["split_goal"])
+	{
+		IntPtr timerStopPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.timerStopIndex);
+		double timerStop = memory.ReadValue<double>(timerStopPtr);
+		
+		current.timerStop = timerStop;
 
-	//if (vars.currentStageClearArrayPtr == IntPtr.Zero)
-	vars.currentStageClearArrayPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.arrayStageClearIndex);
-	
-	if (vars.currentStageClearArrayPtr == IntPtr.Zero)
-		return false;
-	
-	// Read the stage complete array:
-	// - The value we read off of GlobalData is a pointer to an ArrayMetadata structure:
-	//
-	// +0x0 parent pointer
-	// +0x8 array data
-	// +0x18 array refcount (expect 1)
-	// +0x24 array length (expect 200)
-	IntPtr actualArray = memory.ReadPointer((IntPtr)vars.currentStageClearArrayPtr);
-	
-	IntPtr arrayData = memory.ReadPointer(actualArray + 0x8);
-	int numElements = memory.ReadValue<int>(actualArray + 0x24);
-	
-	// Read the bytes in the array. It's an array of RValues, so each element is 16 bytes long,
-	// and the first 8 bytes are the value we're looking for.
-	//
-	// If any value has become > 0 and we haven't previously seen it be > 0 we should split.
-	byte[] stageClearArray = memory.ReadBytes(arrayData, numElements * 16);
-	for (int i = 0; i < numElements; ++i) {
-		double value = BitConverter.ToDouble(stageClearArray, i * 16);
-		if (! vars.clearedExits[i] && value > 0) {
-			vars.clearedExits[i] = true;
+		// timerStop is set to 2 between landing on a goal and walking off the screen,
+		// and also during the opening cutscene.
+		//
+		// If room is 204 we're in the opening cutscene and don't want to split. Otherwise,
+		// we split when the value is set to 2.
+		if (current.room == 204)
+			return false;
+		
+		if (current.timerStop == 2 && old.timerStop == 0)
 			return true;
+
+		return false;
+	}
+
+	if (settings["split_completion"])
+	{
+		vars.currentStageClearArrayPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.arrayStageClearIndex);
+		
+		if (vars.currentStageClearArrayPtr == IntPtr.Zero)
+			return false;
+		
+		// Read the stage complete array:
+		// - The value we read off of GlobalData is a pointer to an ArrayMetadata structure:
+		//
+		// +0x0 parent pointer
+		// +0x8 array data
+		// +0x18 array refcount (expect 1)
+		// +0x24 array length (expect 200)
+		IntPtr actualArray = memory.ReadPointer((IntPtr)vars.currentStageClearArrayPtr);
+		
+		IntPtr arrayData = memory.ReadPointer(actualArray + 0x8);
+		int numElements = memory.ReadValue<int>(actualArray + 0x24);
+		
+		// Read the bytes in the array. It's an array of RValues, so each element is 16 bytes long,
+		// and the first 8 bytes are the value we're looking for.
+		//
+		// If any value has become > 0 and we haven't previously seen it be > 0 we should split.
+		byte[] stageClearArray = memory.ReadBytes(arrayData, numElements * 16);
+		for (int i = 0; i < numElements; ++i) {
+			// Home is stage 60. Just skip it. It completes as soon as the level starts, both exits
+			// so we'd just immediately split.
+			if (i/2 == 60)
+				continue;
+			
+			double value = BitConverter.ToDouble(stageClearArray, i * 16);
+			if (! vars.clearedExits[i] && value > 0) {
+				vars.DebugOutput("Completed stage " + (i/2) + " exit " + (i%2) + " element " + i);
+				vars.clearedExits[i] = true;
+				return true;
+			}
 		}
-	}		
+
+		return false;
+	}
     
 	return false;
 }
