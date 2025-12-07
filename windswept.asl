@@ -59,74 +59,74 @@ startup {
 	vars.DebugOutput("Windswept autosplitter starting");
 	
 	// Function to do the hashmap linear probe using Robin Hood hashing
-    // Returns the RValue* (the value pointer), or IntPtr.Zero if not found
-    Func<Process, IntPtr, long, IntPtr> HashmapLookup = (process, hashmapPtr, key) => {
-        if (hashmapPtr == IntPtr.Zero)
-            return IntPtr.Zero;
-        
-        // Read hashmap structure (GMVarHashmap)
-        // +0x00: int32_t capacity
-        // +0x04: int32_t count
-        // +0x08: int32_t mask
-        // +0x0c: int32_t loadThreshold
-        // +0x10: HashMapBucket* data
+	// Returns the RValue* (the value pointer), or IntPtr.Zero if not found
+	Func<Process, IntPtr, long, IntPtr> HashmapLookup = (process, hashmapPtr, key) => {
+		if (hashmapPtr == IntPtr.Zero)
+			return IntPtr.Zero;
 		
-        int capacity = process.ReadValue<int>(hashmapPtr + 0x00);
-        int count = process.ReadValue<int>(hashmapPtr + 0x04);
-        int mask = process.ReadValue<int>(hashmapPtr + 0x08);
-        int loadThreshold = process.ReadValue<int>(hashmapPtr + 0x0c);
-        IntPtr data = process.ReadPointer(hashmapPtr + 0x10);
-        
-       
-        if (data == IntPtr.Zero)
-            return IntPtr.Zero;
-        
-        // Compute hash: (key + 1) & 0x7fffffff
-        uint hash = (uint)((key + 1) & 0x7fffffff);
-        
-        // Initial bucket index
-        uint bucketIndex = hash & (uint)mask;
-        int psl = 0; // Probe sequence length
-           
-        // HashMapBucket is 0x10 bytes:
-        // +0x00: void* value (8 bytes)
-        // +0x08: int32_t key (4 bytes)
-        // +0x0c: uint32_t hash (4 bytes)
-        
-        int maxProbes = capacity; // Safety limit
-        for (int i = 0; i < maxProbes; i++) {
-            IntPtr bucketPtr = data + ((int)bucketIndex * 0x10);
-            
-            long value = process.ReadValue<long>(bucketPtr + 0x00);
-            int bucketKey = process.ReadValue<int>(bucketPtr + 0x08);
-            uint bucketHash = process.ReadValue<uint>(bucketPtr + 0x0c);
-            
-            // If hash matches, we found it
-            if (bucketHash == hash)
-                return (IntPtr)value;
-            
-            // Empty bucket (hash == 0) means not found
-            if (bucketHash == 0)
-                return IntPtr.Zero;
-            
-            // Robin Hood hashing: check PSL
-            // PSL = (capacity - (mask & bucketHash)) + bucketIndex & mask
-            int bucketPSL = ((capacity - (int)(mask & bucketHash)) + (int)bucketIndex) & mask;
-            
-            // If our PSL is greater than the bucket's PSL, the key doesn't exist
-            // (Robin Hood invariant: entries are sorted by PSL)
-            if (psl > bucketPSL)
-                return IntPtr.Zero;
-            
-            // Move to next bucket
-            psl++;
-            bucketIndex = ((bucketIndex + 1) & (uint)mask);
-        }
-        
-        // max probes exceeded; not found
-        return IntPtr.Zero;
-    };
-    vars.HashmapLookup = HashmapLookup;
+		// Read hashmap structure (GMVarHashmap)
+		// +0x00: int32_t capacity
+		// +0x04: int32_t count
+		// +0x08: int32_t mask
+		// +0x0c: int32_t loadThreshold
+		// +0x10: HashMapBucket* data
+		
+		int capacity = process.ReadValue<int>(hashmapPtr + 0x00);
+		int count = process.ReadValue<int>(hashmapPtr + 0x04);
+		int mask = process.ReadValue<int>(hashmapPtr + 0x08);
+		int loadThreshold = process.ReadValue<int>(hashmapPtr + 0x0c);
+		IntPtr data = process.ReadPointer(hashmapPtr + 0x10);
+		
+	   
+		if (data == IntPtr.Zero)
+			return IntPtr.Zero;
+		
+		// Compute hash: (key + 1) & 0x7fffffff
+		uint hash = (uint)((key + 1) & 0x7fffffff);
+		
+		// Initial bucket index
+		uint bucketIndex = hash & (uint)mask;
+		int psl = 0; // Probe sequence length
+		   
+		// HashMapBucket is 0x10 bytes:
+		// +0x00: void* value (8 bytes)
+		// +0x08: int32_t key (4 bytes)
+		// +0x0c: uint32_t hash (4 bytes)
+		
+		int maxProbes = capacity; // Safety limit
+		for (int i = 0; i < maxProbes; i++) {
+			IntPtr bucketPtr = data + ((int)bucketIndex * 0x10);
+			
+			long value = process.ReadValue<long>(bucketPtr + 0x00);
+			int bucketKey = process.ReadValue<int>(bucketPtr + 0x08);
+			uint bucketHash = process.ReadValue<uint>(bucketPtr + 0x0c);
+			
+			// If hash matches, we found it
+			if (bucketHash == hash)
+				return (IntPtr)value;
+			
+			// Empty bucket (hash == 0) means not found
+			if (bucketHash == 0)
+				return IntPtr.Zero;
+			
+			// Robin Hood hashing: check PSL
+			// PSL = (capacity - (mask & bucketHash)) + bucketIndex & mask
+			int bucketPSL = ((capacity - (int)(mask & bucketHash)) + (int)bucketIndex) & mask;
+			
+			// If our PSL is greater than the bucket's PSL, the key doesn't exist
+			// (Robin Hood invariant: entries are sorted by PSL)
+			if (psl > bucketPSL)
+				return IntPtr.Zero;
+			
+			// Move to next bucket
+			psl++;
+			bucketIndex = ((bucketIndex + 1) & (uint)mask);
+		}
+		
+		// max probes exceeded; not found
+		return IntPtr.Zero;
+	};
+	vars.HashmapLookup = HashmapLookup;
 
 	// Based on: https://github.com/NoTeefy/LiveSnips/blob/master/src/snippets/checksum(hashing)/checksum.asl
 	Func<ProcessModuleWow64Safe, string> CalcModuleHash = (module) => {
@@ -145,11 +145,11 @@ startup {
 	};
 	vars.CalcModuleHash = CalcModuleHash;
 	
-	settings.Add("split_goal", false, "Split on Goal Spring");
-	settings.SetToolTip("split_goal", "Split when landing on a goal spring, even if that goal has been taken before.\n\nTakes priority over splitting on clearing a level if both are on.");
+	settings.Add("split_once_per_spring", true, "Split Once per Goal Spring.");
+	settings.SetToolTip("split_once_per_spring", "If on, split only the first time a spring is hit. If off, split every time a goal spring is hit");
 	
-	settings.Add("split_completion", true, "Split on Clearing Level");
-	settings.SetToolTip("split_completion", "Split when a level exit is opened on the world map. Will not split a second time if a goal spring is taken for a second time. Will split for the regular and secret exits for levels.\n\nIf 'Split on Goal Spring' is on, this is disabled.");
+	settings.Add("split_pinwheel", false, "Only Split On Pinwheels.", "split_once_per_spring");
+	settings.SetToolTip("split_pinwheel", "If on, only count a goal spring as complete if you got the pinwheel.");
 	
 	vars.clearedExits = new bool[200];
 	vars.firstUpdate = true;
@@ -201,7 +201,7 @@ gameTime {
 	IntPtr timerFullPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.timerFullIndex);
 	current.gameTime = memory.ReadValue<double>(timerFullPtr);
 	
-    return TimeSpan.FromMilliseconds(current.gameTime);
+	return TimeSpan.FromMilliseconds(current.gameTime);
 }
 
 exit {
@@ -225,31 +225,10 @@ reset {
 }
 
 split {
-    if (! settings.SplitEnabled)
-        return false;
-	
-	if (settings["split_goal"])
-	{
-		IntPtr timerStopPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.timerStopIndex);
-		double timerStop = memory.ReadValue<double>(timerStopPtr);
-		
-		current.timerStop = timerStop;
-
-		// timerStop is set to 2 between landing on a goal and walking off the screen,
-		// and also during the opening cutscene.
-		//
-		// If room is 204 we're in the opening cutscene and don't want to split. Otherwise,
-		// we split when the value is set to 2.
-		if (current.room == 204)
-			return false;
-		
-		if (current.timerStop == 2 && old.timerStop == 0)
-			return true;
-
+	if (! settings.SplitEnabled)
 		return false;
-	}
-
-	if (settings["split_completion"])
+	
+	if (settings["split_once_per_spring"])
 	{
 		vars.currentStageClearArrayPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.arrayStageClearIndex);
 		
@@ -280,7 +259,11 @@ split {
 				continue;
 			
 			double value = BitConverter.ToDouble(stageClearArray, i * 16);
-			if (! vars.clearedExits[i] && value > 0) {
+			double threshold = 1;
+			if (settings["split_pinwheel"])
+				threshold = 2;
+			
+			if (! vars.clearedExits[i] && value >= threshold) {
 				vars.DebugOutput("Completed stage " + (i/2) + " exit " + (i%2) + " element " + i);
 				vars.clearedExits[i] = true;
 				return true;
@@ -289,7 +272,27 @@ split {
 
 		return false;
 	}
-    
+	else
+	{
+		IntPtr timerStopPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.timerStopIndex);
+		double timerStop = memory.ReadValue<double>(timerStopPtr);
+		
+		current.timerStop = timerStop;
+
+		// timerStop is set to 2 between landing on a goal and walking off the screen,
+		// and also during the opening cutscene.
+		//
+		// If room is 204 we're in the opening cutscene and don't want to split. Otherwise,
+		// we split when the value is set to 2.
+		if (current.room == 204)
+			return false;
+		
+		if (current.timerStop == 2 && old.timerStop == 0)
+			return true;
+
+		return false;
+	}
+
 	return false;
 }
 
