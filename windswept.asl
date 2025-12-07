@@ -22,6 +22,20 @@
 // - stageType: Double. An enum, 0 == title, 1 == file selection, 2 == arcade, 3 == overworld, > indicates in a level. Used to determine if timer is paused.
 // - frameCountRoom: Double; frames since room started. If < 30 the timer is paused to load textures and things.
 
+state("Windswept", "1.0.8 (GOG)") {
+	int room: "Windswept.exe", 0x1d35758;
+	
+	// GlobalData's hashmap.
+	long globalDataHashMap: "Windswept.exe", 0x1a18f30, 0x48;
+	
+	// Variable indices
+	long arrayStageClearIndex: "Windswept.exe", 0x19b2af8;
+	long timerFullIndex: "Windswept.exe", 0x19b28c8;
+	long timerStopIndex: "Windswept.exe", 0x19b25b8;
+	long stageTypeIndex: "Windswept.exe", 0x19afbf8;
+	long frameCountRoomIndex: "Windswept.exe", 0x19b23f8;
+}
+
 state("Windswept", "1.0.8.1 (Steam)") {
 	int room: "Windswept.exe", 0x1d2a858;
 	
@@ -100,7 +114,7 @@ startup {
 			long value = process.ReadValue<long>(bucketPtr + 0x00);
 			int bucketKey = process.ReadValue<int>(bucketPtr + 0x08);
 			uint bucketHash = process.ReadValue<uint>(bucketPtr + 0x0c);
-			
+				
 			// If hash matches, we found it
 			if (bucketHash == hash)
 				return (IntPtr)value;
@@ -174,12 +188,18 @@ init {
 		version = "1.0.8.1 (Steam)";
 		return;
 	}
+
+	if (moduleSize == 31993856 && hash == "1BA68D3A6C05582FB327362D8B251BE3")
+	{
+		version = "1.0.8 (GOG)";
+		return;
+	}
 	
 	version = "Unrecognised!";
 }
 
 update {
-	if (version == "")
+	if (version == "" || version == "Unrecognised!")
 		return false;
 	
 	current.phase = timer.CurrentPhase;
@@ -234,7 +254,7 @@ split {
 		
 		if (vars.currentStageClearArrayPtr == IntPtr.Zero)
 			return false;
-		
+			
 		// Read the stage complete array:
 		// - The value we read off of GlobalData is a pointer to an ArrayMetadata structure:
 		//
