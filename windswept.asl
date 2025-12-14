@@ -16,11 +16,25 @@
 // }
 //
 // The variables we look at are:
-// - Array_StageClear: Array indicating which stage exits have been completed. Each stage has two entries in the array; 0 indicates not done; 1 indicates complete; 2 indicates complete with pinwheel. We use it for splits.
+// - array_StageClear: Array indicating which stage exits have been completed. Each stage has two entries in the array; 0 indicates not done; 1 indicates complete; 2 indicates complete with pinwheel. We use it for splits.
 // - timer_Full: Double, in game time in milliseconds.
 // - timer_Stop: Double. When > 0, timer is paused; also == 2 during stage clear animations and start-of-game cutscene so could be used for splits.
 // - stageType: Double. An enum, 0 == title, 1 == file selection, 2 == arcade, 3 == overworld, > indicates in a level. Used to determine if timer is paused.
 // - frameCountRoom: Double; frames since room started. If < 30 the timer is paused to load textures and things.
+
+state("Windswept", "1.0.9 (Steam)") {
+	int room: "Windswept.exe", 0x1d34b18;
+	
+	// GlobalData's hashmap.
+	long globalDataHashMap: "Windswept.exe", 0x1a182f0, 0x48;
+
+	// Variable indices
+	long arrayStageClearIndex: "Windswept.exe", 0x19b1338;
+	long timerFullIndex: "Windswept.exe", 0x19b1958;
+	long timerStopIndex: "Windswept.exe", 0x19b1638;
+	long stageTypeIndex: "Windswept.exe", 0x19aec68;
+	long frameCountRoomIndex: "Windswept.exe", 0x19b1478;
+}
 
 state("Windswept", "1.0.8 (GOG)") {
 	int room: "Windswept.exe", 0x1d35758;
@@ -90,7 +104,6 @@ startup {
 		int mask = process.ReadValue<int>(hashmapPtr + 0x08);
 		int loadThreshold = process.ReadValue<int>(hashmapPtr + 0x0c);
 		IntPtr data = process.ReadPointer(hashmapPtr + 0x10);
-		
 	   
 		if (data == IntPtr.Zero)
 			return IntPtr.Zero;
@@ -192,6 +205,12 @@ init {
 	if (moduleSize == 31993856 && hash == "1BA68D3A6C05582FB327362D8B251BE3")
 	{
 		version = "1.0.8 (GOG)";
+		return;
+	}
+	
+	if (moduleSize == 31985664 && hash == "38D299CEC8B8BF3B7E828D76267A1078")
+	{
+		version = "1.0.9 (Steam)";
 		return;
 	}
 	
