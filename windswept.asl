@@ -22,6 +22,20 @@
 // - stageType: Double. An enum, 0 == title, 1 == file selection, 2 == arcade, 3 == overworld, > indicates in a level. Used to determine if timer is paused.
 // - frameCountRoom: Double; frames since room started. If < 30 the timer is paused to load textures and things.
 
+state("Windswept", "1.0.9.1 (Steam)") {
+	int room: "Windswept.exe", 0x1d34b18;
+	
+	// GlobalData's hashmap.
+	long globalDataHashMap: "Windswept.exe", 0x1a182f0, 0x48;
+
+	// Variable indices
+	long arrayStageClearIndex: "Windswept.exe", 0x19b1338;
+	long timerFullIndex: "Windswept.exe", 0x19b1948;
+	long timerStopIndex: "Windswept.exe", 0x19b1638;
+	long stageTypeIndex: "Windswept.exe", 0x19aec88;
+	long frameCountRoomIndex: "Windswept.exe", 0x19b1468;
+}
+
 state("Windswept", "1.0.9 (Steam)") {
 	int room: "Windswept.exe", 0x1d34b18;
 	
@@ -214,6 +228,12 @@ init {
 		return;
 	}
 	
+	if (moduleSize == 31985664 && hash == "9A440B441E75C3082047D5E126F251BD")
+	{
+		version = "1.0.9.1 (Steam)";
+		return;
+	}
+	
 	version = "Unrecognised!";
 }
 
@@ -232,6 +252,15 @@ update {
 		vars.DebugOutput("Resetting splits");
 		vars.clearedExits = new bool[200];
 	}
+	
+	IntPtr stageTypePtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.stageTypeIndex);
+	current.stageType = memory.ReadValue<double>(stageTypePtr);
+	
+	IntPtr frameCountRoomPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.frameCountRoomIndex);
+	current.roomFrameCount = memory.ReadValue<double>(frameCountRoomPtr);
+		
+	IntPtr timerStopPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.timerStopIndex);
+	current.timerStop = memory.ReadValue<double>(timerStopPtr);
 	
 	return true;
 }
@@ -290,34 +319,36 @@ split {
 		// and the first 8 bytes are the value we're looking for.
 		//
 		// If any value has become > 0 and we haven't previously seen it be > 0 we should split.
+		//
+		// We split if *any* value has become > 0 but we remember *every* value that became > 0 so that if multiple
+		// exits are completed at the same time we only split once. This happens with Home and with some other stages
+		// that have two exits coming off of them.
+		bool anyCompletions = false;
 		byte[] stageClearArray = memory.ReadBytes(arrayData, numElements * 16);
-		for (int i = 0; i < numElements; ++i) {
-			// Home is stage 60. Just skip it. It completes as soon as the level starts, both exits
-			// so we'd just immediately split.
-			if (i/2 == 60)
-				continue;
-			
+		for (int i = 0; i < numElements; ++i) {		
 			double value = BitConverter.ToDouble(stageClearArray, i * 16);
 			double threshold = 1;
 			if (settings["split_pinwheel"])
 				threshold = 2;
+				
+			if (i / 2 == 60) { // Home
+				threshold = 1;
+						
+				if (current.stageType > 3)
+					continue;
+			}
 			
 			if (! vars.clearedExits[i] && value >= threshold) {
-				vars.DebugOutput("Completed stage " + (i/2) + " exit " + (i%2) + " element " + i);
+				vars.DebugOutput("Completed stage " + (i/2) + " exit " + (i%2) + " element " + i + " with value " + value);
 				vars.clearedExits[i] = true;
-				return true;
+				anyCompletions = true;
 			}
 		}
 
-		return false;
+		return anyCompletions;
 	}
 	else
 	{
-		IntPtr timerStopPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.timerStopIndex);
-		double timerStop = memory.ReadValue<double>(timerStopPtr);
-		
-		current.timerStop = timerStop;
-
 		// timerStop is set to 2 between landing on a goal and walking off the screen,
 		// and also during the opening cutscene.
 		//
@@ -341,22 +372,13 @@ isLoading {
 	// - We're in the first 30 frames of a level OR
 	// - timerStop is > 0
 	
-	IntPtr stageTypePtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.stageTypeIndex);
-	double stageType = memory.ReadValue<double>(stageTypePtr);
-	
-	if (stageType <= 3)
+	if (current.stageType <= 3)
 		return true;
 	
-	IntPtr frameCountRoomPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.frameCountRoomIndex);
-	double frameCount = memory.ReadValue<double>(frameCountRoomPtr);
-		
-	if (frameCount < 30)
+	if (current.roomFrameCount < 30)
 		return true;
 	
-	IntPtr timerStopPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.timerStopIndex);
-	double timerStop = memory.ReadValue<double>(timerStopPtr);
-	
-	if (timerStop > 0)
+	if (current.timerStop > 0)
 		return true;
 	
 	return false;
