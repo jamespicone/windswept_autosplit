@@ -22,6 +22,20 @@
 // - stageType: Double. An enum, 0 == title, 1 == file selection, 2 == arcade, 3 == overworld, > indicates in a level. Used to determine if timer is paused.
 // - frameCountRoom: Double; frames since room started. If < 30 the timer is paused to load textures and things.
 
+state("Windswept", "1.1.0 (Steam)") {
+	int room: "Windswept.exe", 0x1d36b48;
+	
+	// GlobalData's hashmap.
+	long globalDataHashMap: "Windswept.exe", 0x1a1a320, 0x48;
+
+	// Variable indices
+	long arrayStageClearIndex: "Windswept.exe", 0x19b33a8;
+	long timerFullIndex: "Windswept.exe", 0x19b39e8;
+	long timerStopIndex: "Windswept.exe", 0x19b36b8;
+	long stageTypeIndex: "Windswept.exe", 0x19b0d08;
+	long frameCountRoomIndex: "Windswept.exe", 0x19b3508;
+}
+
 state("Windswept", "1.0.9.1 (Steam)") {
 	int room: "Windswept.exe", 0x1d34b18;
 	
@@ -231,6 +245,12 @@ init {
 	if (moduleSize == 31985664 && hash == "9A440B441E75C3082047D5E126F251BD")
 	{
 		version = "1.0.9.1 (Steam)";
+		return;
+	}
+	
+	if (moduleSize == 31993856 && hash == "A0A9013416485F54959D2BF6C406B6D8")
+	{
+		version = "1.1.0 (Steam)";
 		return;
 	}
 	
