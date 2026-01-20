@@ -1,0 +1,63 @@
+comet coins don't go to 2 until collected properly.
+
+Stage 0: Guiding Glade, 3 moons, 2 exits
+stage 1: hoppet whatever, 3 moons
+stage 2: bridge wheel waterway, 3 moons
+stage 3: bluppo's barge, 2 moons
+stage 4: salamancer's sanctum, 3 moons
+stage 5: hue's shade, 2 moons
+stage 6: bramble's in the breeze, 2 moons
+stage 7: octulent's onslaught, has cloud, no comet, no moons
+stage 8: thornado, 1 moon
+stage 9: cawbie cliffs, 2 moons
+stage 10: nippa's nook, 2 moons
+stage 11: pips and pits 2 moons
+stage 12: honey hop hollow 2 moons
+stage 13: over the raybow 3 moons
+stage 14: grabba's grotto 3 moons
+stage 15: skree's spire 3 moons
+stage 16: beevy battlefield 2 moons
+stage 17: the pip ship 1 moon, no comet, no moons
+stage 18: calamitous chasm 1 moon
+stage 19: nugget 2 moons
+stage 20: temporal railroad 1 moon
+stage 21: aucora's abyss 3 moons
+stage 22: slicko slide 3 moons
+stage 23: end of the raybow 2 moons
+stage 24: lunosa's library 5 moons
+stage 25: dizzying descent 1 moon
+stage 26: spicy ice speedway 2 moons
+stage 27: magmaw well 3 moons
+stage 28: lava pike polder 2 moons
+stage 29: honey buzz boiler 2 moons
+stage 30: vexatious vents 2 moons
+stage 31: rusty reservoir 2 moons
+stage 32: smoky squall 2 moons
+stage 33: b.v. broadcast tower cloud, no moons, no comet
+stage 34: sawmill thrill 1 moon
+stage 35: bells end 3 moons
+stage 36: thrillhex thicket 2 moons
+stage 37: shrine of the salamancer 2 moons
+stage 38: prickly peril 2 moons
+stage 39: toxic tunnel 2 moons
+stage 40: cirra's strife cloud, no moons, no comet
+stage 41: baneful briar 1 moon
+stage 42: cirra superstorm cloud
+stage 43: cloudy clamber 1 moon
+stage 44: wingbeat wharf 1 moon
+stage 45: turbulent torrent 1 moon
+stage 46: shiver-sling spring 1 moon
+stage 47: ashen dash1 moon
+stage 48: sunset scuttle 1 moon
+stage 49: skywarde horde 1 moon
+stage 50: pip pop to the top 1 moon
+stage 51: frigid flurry 1 moon
+stage 52: grabba's gauntlet 1 moon
+stage 53: honey-side up 1 moon
+stage 54: dire dire ducts 1 moon
+stage 55: dropdash chaparral 1 moon
+stage 56: dreadmaw's dwelling 1 moon
+stage 57: cyclonic skyway 1 moon
+stage 58: windswept 0 moon
+stage 59: windswept ex 0 moon
+stage 60: home 1 moon (I think the stage select moon?)

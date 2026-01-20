@@ -76,6 +76,10 @@ state("Windswept", "1.0.9.1 (Steam)") {
 	long timerStopIndex: "Windswept.exe", 0x19b1638;
 	long stageTypeIndex: "Windswept.exe", 0x19aec88;
 	long frameCountRoomIndex: "Windswept.exe", 0x19b1468;
+	long arrayCometCoinIndex: "Windswept.exe", 0x19b1298;
+	long arrayCometShardIndex: "Windswept.exe", 0x19b1858;
+	long arrayMoonCoinsIndex: "Windswept.exe", 0x19b2858;
+	long arrayCloudCoinsIndex: "Windswept.exe", 0x19b25b8;
 }
 
 state("Windswept", "1.0.9 (Steam)") {
@@ -228,11 +232,106 @@ startup {
 	};
 	vars.CalcModuleHash = CalcModuleHash;
 	
-	settings.Add("split_once_per_spring", true, "Split Once per Goal Spring.");
-	settings.SetToolTip("split_once_per_spring", "If on, split only the first time a spring is hit. If off, split every time a goal spring is hit");
+	settings.Add("split_on_hitting_spring", false, "Split when hitting a Goal Spring.");
+	settings.SetToolTip("split_on_hitting_spring", "If on, will split when landing on a goal spring, regardless of whether it's completing a level or not. You probably don't want the other split types on with this.");
 	
-	settings.Add("split_pinwheel", false, "Only Split On Pinwheels.", "split_once_per_spring");
-	settings.SetToolTip("split_pinwheel", "If on, only count a goal spring as complete if you got the pinwheel.");
+	settings.Add("split_on_finish_level", true, "Split when you complete a new level.");
+	settings.SetToolTip("split_on_finish_level", "This will split when you complete a level exit for the first time; the difference between this and 'Split when hitting a Goal Spring' is that it won't split if you go back in and complete the level from the same exit.");
+		
+	settings.Add("split_pinwheel", false, "Only Split On Pinwheels.", "split_on_finish_level");
+	settings.SetToolTip("split_pinwheel", "If on, only count split on an exit if you got the pinwheel.");
+	
+	settings.Add("split_akc", false, "Only Split on All Key Collectables.", "split_pinwheel");
+	settings.SetToolTip("split_akc", "If on, only split on a level if you got all key collectables and all exits.");
+	
+	
+	// Idea borrowed from the undertale autosplitter to store complex data when we can't define
+	// structs. The object[] array is a replacement for a struct; specific values are stored at specific
+	// indices, and these levelindex variables indicate what index == what data.
+	vars.levelindex_name = 0; // string
+	vars.levelindex_number_exits = 1; // int
+	vars.levelindex_has_comet = 2; // bool
+	vars.levelindex_has_cloud = 3; // bool
+	vars.levelindex_num_moons = 4; // int
+	
+	vars.level_data = new Dictionary<int, object[]>() {
+		{ 0, new object[] { "Guiding Glade", 2, true, true, 3 } },
+		{ 1, new object[] { "Hoppet Heights", 1, true, true, 3 } },
+		{ 2, new object[] { "Bridge-Wheel Waterway", 1, true, true, 3 } },
+		{ 3, new object[] { "Bluppo's Barge", 1, true, true, 2 } },
+		{ 4, new object[] { "Salamancer's Sanctum", 1, true, true, 3 } },
+		{ 5, new object[] { "Hue's Shade", 1, true, true, 2 } },
+		{ 6, new object[] { "Brambles in the Breeze", 1, true, true, 2 } },
+		{ 7, new object[] { "Octulent's Onslaught", 1, false, true, 0 } },
+		{ 8, new object[] { "Thornado", 1, true, true, 1 } },
+		{ 9, new object[] { "Cawbie Cliffs", 1, true, true, 2 } },
+		{ 10, new object[] { "Nippa's Nook", 1, true, true, 2 } },
+		{ 11, new object[] { "Pips and Pits", 1, true, true, 2 } },
+		{ 12, new object[] { "Honey Hop Hollow", 2, true, true, 2 } },
+		{ 13, new object[] { "Over the Raybow", 1, true, true, 3 } },
+		{ 14, new object[] { "Grabba's Grotto", 1, true, true, 3 } },
+		{ 15, new object[] { "Skree's Spire", 1, true, true, 3 } },
+		{ 16, new object[] { "Beevy Battlefield", 1, true, true, 2 } },
+		{ 17, new object[] { "The Pip Ship", 1, false, true, 0 } },
+		{ 18, new object[] { "Calamitous Chasm", 1, true, true, 1 } },
+		{ 19, new object[] { "Nugget's Snowy Sprint", 1, true, true, 2 } },
+		{ 20, new object[] { "Temporal Railroad", 1, true, true, 1 } },
+		{ 21, new object[] { "Aucora's Abyss", 1, true, true, 3 } },
+		{ 22, new object[] { "Slicko Slide", 2, true, true, 3 } },
+		{ 23, new object[] { "End of the Raybow", 1, true, true, 2 } },
+		{ 24, new object[] { "Lunosa's Library", 1, true, true, 5 } },
+		{ 25, new object[] { "Dizzying Descent", 1, true, true, 1 } },
+		{ 26, new object[] { "Spicy Ice Speedway", 1, true, true, 2 } },
+		{ 27, new object[] { "Magmaw Well", 1, true, true, 3 } },
+		{ 28, new object[] { "Lava Pike Polder", 1, true, true, 2 } },
+		{ 29, new object[] { "Honey Buzz Boiler", 1, true, true, 2 } },
+		{ 30, new object[] { "Vexatious Vents", 2, true, true, 2 } },
+		{ 31, new object[] { "Rusty Reservoir", 1, true, true, 2 } },
+		{ 32, new object[] { "Smoky Squall", 1, true, true, 2 } },
+		{ 33, new object[] { "B.V. Broadcast Tower", 1, false, true, 0 } },
+		{ 34, new object[] { "Sawmill Thrill", 1, true, true, 1 } },
+		{ 35, new object[] { "Bell's End", 1, true, true, 3 } },
+		{ 36, new object[] { "Thrillhex Thicket", 2, true, true, 2 } },
+		{ 37, new object[] { "Shrine of the Salamancer", 1, true, true, 2 } },
+		{ 38, new object[] { "Prickly Peril", 1, true, true, 2 } },
+		{ 39, new object[] { "Toxic Tunnel", 1, true, true, 2 } },
+		{ 40, new object[] { "Cirra's Strife", 1, false, true, 0 } },
+		{ 41, new object[] { "Baneful Briar", 1, true, true, 1 } },
+		{ 42, new object[] { "Cirra Superstorm", 1, false, true, 0 } },
+		{ 43, new object[] { "Cloudy Clamber", 1, true, true, 1 } },
+		{ 44, new object[] { "Wingbeat Wharf", 1, true, true, 1 } },
+		{ 45, new object[] { "Turbulent Torrent", 1, true, true, 1 } },
+		{ 46, new object[] { "Shiver-Sling Spring", 1, true, true, 1 } },
+		{ 47, new object[] { "Ashen Dash", 1, true, true, 1 } },
+		{ 48, new object[] { "Sunset Scuttle", 1, true, true, 1 } },
+		{ 49, new object[] { "Skyward Horde", 1, true, true, 1 } },
+		{ 50, new object[] { "Pip Pop to the Top", 1, true, true, 1 } },
+		{ 51, new object[] { "Frigid Flurry", 1, true, true, 1 } },
+		{ 52, new object[] { "Grabba's Gauntlet", 1, true, true, 1 } },
+		{ 53, new object[] { "Honey-Side Up", 1, true, true, 1 } },
+		{ 54, new object[] { "Dire Dire Ducts", 1, true, true, 1 } },
+		{ 55, new object[] { "Dropdash Chaparral", 1, true, true, 1 } },
+		{ 56, new object[] { "Dreadmaw's Dwelling", 1, true, true, 1 } },
+		{ 57, new object[] { "Cyclonic Skyway", 1, true, true, 1 } },
+		{ 58, new object[] { "Windswept", 1, true, true, 0 } },
+		{ 59, new object[] { "Windswept EX", 1, true, true, 0 } },
+		{ 60, new object[] { "Home", 1, false, false, 1 } }
+	};
+	
+	foreach (var level in vars.level_data.Keys) {
+		var key = "split_level_" + level;
+		var text = "Split for " + vars.level_data[level][vars.levelindex_name];
+		
+		settings.Add(key, true, text, "split_on_finish_level");
+		
+		if (vars.level_data[level][vars.levelindex_number_exits] > 1) {
+			key += "_alt";
+			text += " (alternate exit)";
+			settings.Add(key, true, text, "split_on_finish_level");
+		}
+	}
+	
+	
 	
 	vars.clearedExits = new bool[200];
 	vars.firstUpdate = true;
