@@ -331,8 +331,6 @@ startup {
 		}
 	}
 	
-	
-	
 	vars.clearedExits = new bool[200];
 	vars.firstUpdate = true;
 	
@@ -454,75 +452,92 @@ reset {
 split {
 	if (! settings.SplitEnabled)
 		return false;
-	
-	if (settings["split_once_per_spring"])
-	{
-		vars.currentStageClearArrayPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.arrayStageClearIndex);
-		
-		if (vars.currentStageClearArrayPtr == IntPtr.Zero)
-			return false;
-			
-		// Read the stage complete array:
-		// - The value we read off of GlobalData is a pointer to an ArrayMetadata structure:
-		//
-		// +0x0 parent pointer
-		// +0x8 array data
-		// +0x18 array refcount (expect 1)
-		// +0x24 array length (expect 200)
-		IntPtr actualArray = memory.ReadPointer((IntPtr)vars.currentStageClearArrayPtr);
-		
-		IntPtr arrayData = memory.ReadPointer(actualArray + 0x8);
-		int numElements = memory.ReadValue<int>(actualArray + 0x24);
-		
-		// Read the bytes in the array. It's an array of RValues, so each element is 16 bytes long,
-		// and the first 8 bytes are the value we're looking for.
-		//
-		// If any value has become > 0 and we haven't previously seen it be > 0 we should split.
-		//
-		// We split if *any* value has become > 0 but we remember *every* value that became > 0 so that if multiple
-		// exits are completed at the same time we only split once. This happens with Home and with some other stages
-		// that have two exits coming off of them.
-		bool anyCompletions = false;
-		byte[] stageClearArray = memory.ReadBytes(arrayData, numElements * 16);
-		for (int i = 0; i < numElements; ++i) {		
-			double value = BitConverter.ToDouble(stageClearArray, i * 16);
-			double threshold = 1;
-			if (settings["split_pinwheel"])
-				threshold = 2;
-				
-			if (i / 2 == 60) { // Home
-				threshold = 1;
-						
-				if (current.stageType > 3)
-					continue;
-			}
-			
-			if (! vars.clearedExits[i] && value >= threshold) {
-				vars.DebugOutput("Completed stage " + (i/2) + " exit " + (i%2) + " element " + i + " with value " + value);
-				vars.clearedExits[i] = true;
-				anyCompletions = true;
-			}
-		}
 
-		return anyCompletions;
-	}
-	else
+	bool shouldSplit = false;
+
+	// Mode 1: Split on any goal spring hit, regardless of whether it's a new completion.
+	if (settings["split_on_hitting_spring"])
 	{
 		// timerStop is set to 2 between landing on a goal and walking off the screen,
 		// and also during the opening cutscene.
 		//
 		// If room is 204 we're in the opening cutscene and don't want to split. Otherwise,
 		// we split when the value is set to 2.
-		if (current.room == 204)
-			return false;
-		
-		if (current.timerStop == 2 && old.timerStop == 0)
-			return true;
-
-		return false;
+		if (current.room != 204 && current.timerStop == 2 && old.timerStop == 0)
+			shouldSplit = true;
 	}
 
-	return false;
+	// Mode 2: Split when completing a level exit for the first time, with per-level filtering.
+	if (settings["split_on_finish_level"])
+	{
+		vars.currentStageClearArrayPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.arrayStageClearIndex);
+
+		if (vars.currentStageClearArrayPtr != IntPtr.Zero)
+		{
+			// Read the stage complete array:
+			// - The value we read off of GlobalData is a pointer to an ArrayMetadata structure:
+			//
+			// +0x0 parent pointer
+			// +0x8 array data
+			// +0x18 array refcount (expect 1)
+			// +0x24 array length (expect 200)
+			IntPtr actualArray = memory.ReadPointer((IntPtr)vars.currentStageClearArrayPtr);
+
+			IntPtr arrayData = memory.ReadPointer(actualArray + 0x8);
+			int numElements = memory.ReadValue<int>(actualArray + 0x24);
+
+			// Read the bytes in the array. It's an array of RValues, so each element is 16 bytes long,
+			// and the first 8 bytes are the value we're looking for.
+			//
+			// If any value has become > 0 and we haven't previously seen it be > 0 we should split.
+			//
+			// We split if *any* value has become > 0 but we remember *every* value that became > 0 so that if multiple
+			// exits are completed at the same time we only split once. This happens with Home and with some other stages
+			// that have two exits coming off of them.
+			byte[] stageClearArray = memory.ReadBytes(arrayData, numElements * 16);
+			for (int i = 0; i < numElements; ++i) {
+				int stage = i / 2;
+				int exit = i % 2;
+
+				// Skip stages we don't have data for
+				if (! vars.level_data.ContainsKey(stage))
+					continue;
+
+				// Check per-level setting
+				string levelKey = "split_level_" + stage;
+				if (exit == 1) {
+					if ((int)vars.level_data[stage][vars.levelindex_number_exits] > 1)
+						levelKey += "_alt";
+					else
+						continue; // Single-exit stage; skip exit 1
+				}
+
+				if (! settings[levelKey])
+					continue;
+
+				double value = BitConverter.ToDouble(stageClearArray, i * 16);
+				double threshold = 1;
+				if (settings["split_pinwheel"])
+					threshold = 2;
+
+				// Home (stage 60) always uses threshold 1 (no pinwheel), and only
+				// triggers when we're not currently in a level (stageType <= 3).
+				if (stage == 60) {
+					threshold = 1;
+					if (current.stageType > 3)
+						continue;
+				}
+
+				if (! vars.clearedExits[i] && value >= threshold) {
+					vars.DebugOutput("Completed stage " + stage + " (" + vars.level_data[stage][vars.levelindex_name] + ") exit " + exit + " with value " + value);
+					vars.clearedExits[i] = true;
+					shouldSplit = true;
+				}
+			}
+		}
+	}
+
+	return shouldSplit;
 }
 
 isLoading {
