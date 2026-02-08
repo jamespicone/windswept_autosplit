@@ -33,7 +33,11 @@ state("Windswept", "1.1.01 Hotfix (Steam)") {
 	long timerFullIndex: "Windswept.exe", 0x19b6a38 ; // timer_Full
 	long timerStopIndex: "Windswept.exe", 0x19b66f8 ; // timer_Stop
 	long stageTypeIndex: "Windswept.exe", 0x19b3d58 ; // stageType
-	long frameCountRoomIndex: "Windswept.exe", 0x19b6548 ;
+	long frameCountRoomIndex: "Windswept.exe", 0x19b6548 ; // frameCount_Room
+	long arrayCometCoinIndex: "Windswept.exe", 0x19b6358 ; // array_CometCoins
+	long arrayCometShardIndex: "Windswept.exe", 0x19b6938 ; // array_CometShards
+	long arrayMoonCoinsIndex: "Windswept.exe", 0x19b7908 ; // array_MoonCoins
+	long arrayCloudCoinsIndex: "Windswept.exe", 0x19b7648 ; // array_CloudCoins
 }
 
 state("Windswept", "1.1.01 (Steam)") {
@@ -231,7 +235,72 @@ startup {
 		return hash;
 	};
 	vars.CalcModuleHash = CalcModuleHash;
-	
+
+	// Read a value from a simple (1D) GameMaker array at a given stage index.
+	// Returns the double value, or -1 on failure.
+	Func<Process, IntPtr, long, int, double> ReadSimpleArrayValue = (proc, hashmapPtr, arrayIndexVar, stageIndex) => {
+		IntPtr ptr = vars.HashmapLookup(proc, hashmapPtr, arrayIndexVar);
+		if (ptr == IntPtr.Zero)
+			return -1;
+
+		IntPtr metadata = proc.ReadPointer(ptr);
+		IntPtr data = proc.ReadPointer(metadata + 0x8);
+		int length = proc.ReadValue<int>(metadata + 0x24);
+
+		if (stageIndex >= length || stageIndex < 0)
+			return -1;
+
+		return proc.ReadValue<double>(data + (stageIndex * 16));
+	};
+	vars.ReadSimpleArrayValue = ReadSimpleArrayValue;
+
+	// Check if items in a nested (2D) GameMaker array at a given stage index have value >= 1.
+	// Used for comet shards and moon coins, where the outer array is indexed by stage and
+	// each inner array contains the per-item collected status.
+	// expectedCount: if > 0, only check this many elements (inner arrays may be padded beyond
+	// the actual item count, e.g. moon coins always have 5 slots regardless of stage).
+	// If <= 0, check all elements in the inner array.
+	Func<Process, IntPtr, long, int, int, bool> CheckNestedArrayAllCollected = (proc, hashmapPtr, arrayIndexVar, stageIndex, expectedCount) => {
+		IntPtr ptr = vars.HashmapLookup(proc, hashmapPtr, arrayIndexVar);
+		if (ptr == IntPtr.Zero)
+			return false;
+
+		IntPtr outerMeta = proc.ReadPointer(ptr);
+		IntPtr outerData = proc.ReadPointer(outerMeta + 0x8);
+		int outerLen = proc.ReadValue<int>(outerMeta + 0x24);
+
+		if (stageIndex >= outerLen || stageIndex < 0)
+			return false;
+
+		// Read the outer RValue for this stage; type must be 2 (array)
+		IntPtr stageRValueAddr = outerData + (stageIndex * 16);
+		int rvalueType = proc.ReadValue<int>(stageRValueAddr + 0x0C);
+		if (rvalueType != 2)
+			return false;
+
+		// Dereference to inner ArrayMetadata
+		IntPtr innerMetaPtr = proc.ReadPointer(stageRValueAddr);
+		IntPtr innerData = proc.ReadPointer(innerMetaPtr + 0x8);
+		int innerLen = proc.ReadValue<int>(innerMetaPtr + 0x24);
+
+		if (innerLen <= 0)
+			return false;
+
+		int checkCount = (expectedCount > 0) ? expectedCount : innerLen;
+		if (checkCount > innerLen)
+			checkCount = innerLen;
+
+		byte[] innerBytes = proc.ReadBytes(innerData, checkCount * 16);
+		for (int j = 0; j < checkCount; j++) {
+			double val = BitConverter.ToDouble(innerBytes, j * 16);
+			if (val < 1)
+				return false;
+		}
+
+		return true;
+	};
+	vars.CheckNestedArrayAllCollected = CheckNestedArrayAllCollected;
+
 	settings.Add("split_on_hitting_spring", false, "Split when hitting a Goal Spring.");
 	settings.SetToolTip("split_on_hitting_spring", "If on, will split when landing on a goal spring, regardless of whether it's completing a level or not. You probably don't want the other split types on with this.");
 	
@@ -332,8 +401,10 @@ startup {
 	}
 	
 	vars.clearedExits = new bool[200];
+	vars.clearedStagesAKC = new bool[100];
 	vars.firstUpdate = true;
-	
+	vars.akcSupported = false;
+
 	vars.currentStageClearArrayPtr = IntPtr.Zero;
 }
 
@@ -370,6 +441,7 @@ init {
 	if (moduleSize == 31985664 && hash == "9A440B441E75C3082047D5E126F251BD")
 	{
 		version = "1.0.9.1 (Steam)";
+		vars.akcSupported = true;
 		return;
 	}
 	
@@ -388,6 +460,7 @@ init {
 	if (moduleSize == 32006144 && hash == "564C13E0FC184AB0E4C5D57A3915E324")
 	{
 		version = "1.1.01 Hotfix (Steam)";
+		vars.akcSupported = true;
 		return;
 	}
 	
@@ -408,6 +481,7 @@ update {
 	if (current.phase == TimerPhase.Running && old.phase == TimerPhase.NotRunning) {
 		vars.DebugOutput("Resetting splits");
 		vars.clearedExits = new bool[200];
+		vars.clearedStagesAKC = new bool[100];
 	}
 	
 	IntPtr stageTypePtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.stageTypeIndex);
@@ -529,6 +603,41 @@ split {
 				}
 
 				if (! vars.clearedExits[i] && value >= threshold) {
+					// AKC gate: if enabled, require all key collectables before splitting.
+					// If conditions aren't met yet, skip without marking cleared so we recheck next tick.
+					// With AKC we split once per stage (not per exit) to avoid double-splits on
+					// multi-exit levels.
+					if (settings["split_akc"] && vars.akcSupported && stage != 60) {
+						if (vars.clearedStagesAKC[stage]) {
+							vars.clearedExits[i] = true;
+							continue;
+						}
+
+						var data = vars.level_data[stage];
+						bool hasComet = (bool)data[vars.levelindex_has_comet];
+						bool hasCloud = (bool)data[vars.levelindex_has_cloud];
+						int numMoons = (int)data[vars.levelindex_num_moons];
+						IntPtr hm = new IntPtr(current.globalDataHashMap);
+
+						// Comet coin + all comet shards
+						if (hasComet) {
+							if (vars.ReadSimpleArrayValue(memory, hm, current.arrayCometCoinIndex, stage) < 1) continue;
+							if (!vars.CheckNestedArrayAllCollected(memory, hm, current.arrayCometShardIndex, stage, 5)) continue;
+						}
+
+						// All moon coins
+						if (numMoons > 0) {
+							if (!vars.CheckNestedArrayAllCollected(memory, hm, current.arrayMoonCoinsIndex, stage, numMoons)) continue;
+						}
+
+						// Cloud coin
+						if (hasCloud) {
+							if (vars.ReadSimpleArrayValue(memory, hm, current.arrayCloudCoinsIndex, stage) < 1) continue;
+						}
+
+						vars.clearedStagesAKC[stage] = true;
+					}
+
 					vars.DebugOutput("Completed stage " + stage + " (" + vars.level_data[stage][vars.levelindex_name] + ") exit " + exit + " with value " + value);
 					vars.clearedExits[i] = true;
 					shouldSplit = true;
