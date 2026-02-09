@@ -22,6 +22,42 @@
 // - stageType: Double. An enum, 0 == title, 1 == file selection, 2 == arcade, 3 == overworld, > indicates in a level. Used to determine if timer is paused.
 // - frameCountRoom: Double; frames since room started. If < 30 the timer is paused to load textures and things.
 
+state("Windswept", "1.1.01 Hotfix 2 (Steam)") {
+	int room: "Windswept.exe", 0x1d39c78 ;
+	
+	// GlobalData's hashmap.
+	long globalDataHashMap: "Windswept.exe", 0x1a1d450, 0x48;
+
+	// Variable indices
+	long arrayStageClearIndex: "Windswept.exe", 0x19b63f8 ; // array_StageClears
+	long timerFullIndex: "Windswept.exe", 0x19b6a28 ; // timer_Full
+	long timerStopIndex: "Windswept.exe", 0x19b6708 ; // timer_Stop
+	long stageTypeIndex: "Windswept.exe", 0x19b3d38 ; // stageType
+	long frameCountRoomIndex: "Windswept.exe", 0x19b6548 ; // frameCount_Room
+	long arrayCometCoinIndex: "Windswept.exe", 0x19b6378 ; // array_CometCoins
+	long arrayCometShardIndex: "Windswept.exe", 0x19b6918 ; // array_CometShards
+	long arrayMoonCoinsIndex: "Windswept.exe", 0x19b7918 ; // array_MoonCoins
+	long arrayCloudCoinsIndex: "Windswept.exe", 0x19b7658 ; // array_CloudCoins
+}
+
+state("Windswept", "1.1.01 (GOG)") {
+	int room: "Windswept.exe", 0x1d2aa8 ;
+	
+	// GlobalData's hashmap.
+	long globalDataHashMap: "Windswept.exe", 0x1a26280 , 0x48;
+	
+	// Variable indices
+	long arrayStageClearIndex: "Windswept.exe", 0x19bf3e8; // array_StageClears
+	long timerFullIndex: "Windswept.exe", 0x19bf9f8 ; // timer_Full
+	long timerStopIndex: "Windswept.exe", 0x19bf6f8 ; // timer_Stop
+	long stageTypeIndex: "Windswept.exe", 0x19bcd38 ; // stageType
+	long frameCountRoomIndex: "Windswept.exe", 0x19bf528 ; // frameCount_Room
+	long arrayCometCoinIndex: "Windswept.exe", 0x19bf338 ; // array_CometCoins
+	long arrayCometShardIndex: "Windswept.exe", 0x19bf8f8 ; // array_CometShards
+	long arrayMoonCoinsIndex: "Windswept.exe", 0x19c08d8 ; // array_MoonCoins
+	long arrayCloudCoinsIndex: "Windswept.exe", 0x19c0648 ; // array_CloudCoins
+}
+
 state("Windswept", "1.1.01 Hotfix (Steam)") {
 	int room: "Windswept.exe", 0x1d39c78 ;
 	
@@ -29,7 +65,7 @@ state("Windswept", "1.1.01 Hotfix (Steam)") {
 	long globalDataHashMap: "Windswept.exe", 0x1a1d450, 0x48;
 
 	// Variable indices
-	long arrayStageClearIndex: "Windswept.exe", 0x19b63f8;
+	long arrayStageClearIndex: "Windswept.exe", 0x19b63f8; // array_StageClears
 	long timerFullIndex: "Windswept.exe", 0x19b6a38 ; // timer_Full
 	long timerStopIndex: "Windswept.exe", 0x19b66f8 ; // timer_Stop
 	long stageTypeIndex: "Windswept.exe", 0x19b3d58 ; // stageType
@@ -460,6 +496,20 @@ init {
 	if (moduleSize == 32006144 && hash == "564C13E0FC184AB0E4C5D57A3915E324")
 	{
 		version = "1.1.01 Hotfix (Steam)";
+		vars.akcSupported = true;
+		return;
+	}
+	
+	if (moduleSize == 32047104 && hash == "FDDD0EC04F07986361FE370E5C028B9A")
+	{
+		version = "1.1.01 (GOG)";
+		vars.akcSupported = true;
+		return;
+	}
+
+	if (moduleSize == 32006144 && hash == "1AFB64D60DECF8F5AA57F0BF3CE82F0B")
+	{
+		version = "1.1.01 Hotfix 2 (Steam)";
 		vars.akcSupported = true;
 		return;
 	}
