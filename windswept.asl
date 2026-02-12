@@ -41,7 +41,7 @@ state("Windswept", "1.1.01 Hotfix 2 (Steam)") {
 }
 
 state("Windswept", "1.1.01 (GOG)") {
-	int room: "Windswept.exe", 0x1d2aa8 ;
+	int room: "Windswept.exe", 0x1d42aa8 ;
 	
 	// GlobalData's hashmap.
 	long globalDataHashMap: "Windswept.exe", 0x1a26280 , 0x48;
