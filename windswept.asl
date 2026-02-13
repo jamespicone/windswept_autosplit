@@ -426,18 +426,79 @@ startup {
 	foreach (var level in vars.level_data.Keys) {
 		var key = "split_level_" + level;
 		var text = "Split for " + vars.level_data[level][vars.levelindex_name];
-		
+
 		settings.Add(key, true, text, "split_on_finish_level");
-		
+
 		if (vars.level_data[level][vars.levelindex_number_exits] > 1) {
 			key += "_alt";
 			text += " (alternate exit)";
 			settings.Add(key, true, text, "split_on_finish_level");
 		}
 	}
-	
+
+	// Collectable split settings
+	settings.Add("split_on_collectables", false, "Split on collecting individual collectables.");
+	settings.SetToolTip("split_on_collectables", "Split when picking up comet coins, comet shards, moon coins, or cloud coins individually. Requires game version 1.0.9.1+.");
+
+	// Comet coins
+	settings.Add("split_comet_coins", false, "Split on Comet Coins", "split_on_collectables");
+	foreach (var level in vars.level_data.Keys) {
+		if ((bool)vars.level_data[level][vars.levelindex_has_comet]) {
+			settings.Add("split_comet_coin_" + level, false,
+				vars.level_data[level][vars.levelindex_name] + " Comet Coin",
+				"split_comet_coins");
+		}
+	}
+
+	// Comet shards (C, O, M, E, T)
+	vars.shardLetters = new string[] { "C", "O", "M", "E", "T" };
+	settings.Add("split_comet_shards", false, "Split on Comet Shards", "split_on_collectables");
+	foreach (var level in vars.level_data.Keys) {
+		if ((bool)vars.level_data[level][vars.levelindex_has_comet]) {
+			var shardLevelKey = "split_comet_shards_" + level;
+			settings.Add(shardLevelKey, false,
+				vars.level_data[level][vars.levelindex_name],
+				"split_comet_shards");
+			foreach (var letter in vars.shardLetters) {
+				settings.Add("split_comet_shard_" + letter + "_" + level, false,
+					letter,
+					shardLevelKey);
+			}
+		}
+	}
+
+	// Moon coins
+	settings.Add("split_moons", false, "Split on Moon Coins", "split_on_collectables");
+	foreach (var level in vars.level_data.Keys) {
+		int numMoons = (int)vars.level_data[level][vars.levelindex_num_moons];
+		if (numMoons > 0) {
+			settings.Add("split_moons_" + level, false,
+				vars.level_data[level][vars.levelindex_name] + " Moons",
+				"split_moons");
+			for (int mi = 0; mi < numMoons; mi++) {
+				settings.Add("split_moon_" + level + "_" + mi, false,
+					"Moon " + (mi + 1),
+					"split_moons_" + level);
+			}
+		}
+	}
+
+	// Cloud coins
+	settings.Add("split_cloud_coins", false, "Split on Cloud Coins", "split_on_collectables");
+	foreach (var level in vars.level_data.Keys) {
+		if ((bool)vars.level_data[level][vars.levelindex_has_cloud]) {
+			settings.Add("split_cloud_coin_" + level, false,
+				vars.level_data[level][vars.levelindex_name] + " Cloud Coin",
+				"split_cloud_coins");
+		}
+	}
+
 	vars.clearedExits = new bool[200];
 	vars.clearedStagesAKC = new bool[100];
+	vars.seenCometCoins = new bool[100];
+	vars.seenCometShards = new bool[500]; // stage * 5 + shardIndex
+	vars.seenMoonCoins = new bool[500];   // stage * 5 + moonIndex
+	vars.seenCloudCoins = new bool[100];
 	vars.firstUpdate = true;
 	vars.akcSupported = false;
 
@@ -532,6 +593,82 @@ update {
 		vars.DebugOutput("Resetting splits");
 		vars.clearedExits = new bool[200];
 		vars.clearedStagesAKC = new bool[100];
+		vars.seenCometCoins = new bool[100];
+		vars.seenCometShards = new bool[500];
+		vars.seenMoonCoins = new bool[500];
+		vars.seenCloudCoins = new bool[100];
+
+		// Snapshot current collectable state so we don't false-split on already-collected items
+		if (vars.akcSupported && settings["split_on_collectables"]) {
+			IntPtr hm = new IntPtr(current.globalDataHashMap);
+
+			foreach (var level in vars.level_data.Keys) {
+				var data = vars.level_data[level];
+				bool hasComet = (bool)data[vars.levelindex_has_comet];
+				bool hasCloud = (bool)data[vars.levelindex_has_cloud];
+				int numMoons = (int)data[vars.levelindex_num_moons];
+
+				if (hasComet) {
+					// Snapshot comet coin
+					if (vars.ReadSimpleArrayValue(memory, hm, current.arrayCometCoinIndex, level) >= 1)
+						vars.seenCometCoins[level] = true;
+
+					// Snapshot comet shards
+					IntPtr shardPtr = vars.HashmapLookup(memory, hm, current.arrayCometShardIndex);
+					if (shardPtr != IntPtr.Zero) {
+						IntPtr outerMeta = memory.ReadPointer(shardPtr);
+						IntPtr outerData = memory.ReadPointer(outerMeta + 0x8);
+						int outerLen = memory.ReadValue<int>(outerMeta + 0x24);
+						if (level < outerLen) {
+							IntPtr stageRValue = outerData + (level * 16);
+							int rtype = memory.ReadValue<int>(stageRValue + 0x0C);
+							if (rtype == 2) {
+								IntPtr innerMeta = memory.ReadPointer(stageRValue);
+								IntPtr innerData = memory.ReadPointer(innerMeta + 0x8);
+								int innerLen = memory.ReadValue<int>(innerMeta + 0x24);
+								int checkCount = 5 < innerLen ? 5 : innerLen;
+								byte[] innerBytes = memory.ReadBytes(innerData, checkCount * 16);
+								for (int si = 0; si < checkCount; si++) {
+									if (BitConverter.ToDouble(innerBytes, si * 16) >= 1)
+										vars.seenCometShards[level * 5 + si] = true;
+								}
+							}
+						}
+					}
+				}
+
+				if (numMoons > 0) {
+					// Snapshot moon coins
+					IntPtr moonPtr = vars.HashmapLookup(memory, hm, current.arrayMoonCoinsIndex);
+					if (moonPtr != IntPtr.Zero) {
+						IntPtr outerMeta = memory.ReadPointer(moonPtr);
+						IntPtr outerData = memory.ReadPointer(outerMeta + 0x8);
+						int outerLen = memory.ReadValue<int>(outerMeta + 0x24);
+						if (level < outerLen) {
+							IntPtr stageRValue = outerData + (level * 16);
+							int rtype = memory.ReadValue<int>(stageRValue + 0x0C);
+							if (rtype == 2) {
+								IntPtr innerMeta = memory.ReadPointer(stageRValue);
+								IntPtr innerData = memory.ReadPointer(innerMeta + 0x8);
+								int innerLen = memory.ReadValue<int>(innerMeta + 0x24);
+								int checkCount = numMoons < innerLen ? numMoons : innerLen;
+								byte[] innerBytes = memory.ReadBytes(innerData, checkCount * 16);
+								for (int mi = 0; mi < checkCount; mi++) {
+									if (BitConverter.ToDouble(innerBytes, mi * 16) >= 1)
+										vars.seenMoonCoins[level * 5 + mi] = true;
+								}
+							}
+						}
+					}
+				}
+
+				if (hasCloud) {
+					// Snapshot cloud coin
+					if (vars.ReadSimpleArrayValue(memory, hm, current.arrayCloudCoinsIndex, level) >= 1)
+						vars.seenCloudCoins[level] = true;
+				}
+			}
+		}
 	}
 	
 	IntPtr stageTypePtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.stageTypeIndex);
@@ -591,7 +728,157 @@ split {
 			shouldSplit = true;
 	}
 
-	// Mode 2: Split when completing a level exit for the first time, with per-level filtering.
+	// Mode 2: Split on collecting individual collectables (comet coins, shards, moon coins).
+	if (settings["split_on_collectables"] && vars.akcSupported)
+	{
+		IntPtr hm = new IntPtr(current.globalDataHashMap);
+
+		// Comet coins
+		if (settings["split_comet_coins"]) {
+			IntPtr cometCoinPtr = vars.HashmapLookup(memory, hm, current.arrayCometCoinIndex);
+			if (cometCoinPtr != IntPtr.Zero) {
+				IntPtr ccMeta = memory.ReadPointer(cometCoinPtr);
+				IntPtr ccData = memory.ReadPointer(ccMeta + 0x8);
+				int ccLen = memory.ReadValue<int>(ccMeta + 0x24);
+				int readLen = ccLen < 100 ? ccLen : 100;
+				byte[] ccBytes = memory.ReadBytes(ccData, readLen * 16);
+
+				foreach (var level in vars.level_data.Keys) {
+					if (level >= readLen) continue;
+					if (!((bool)vars.level_data[level][vars.levelindex_has_comet])) continue;
+					if (vars.seenCometCoins[level]) continue;
+					if (!settings["split_comet_coin_" + level]) continue;
+
+					double val = BitConverter.ToDouble(ccBytes, level * 16);
+					if (val >= 1) {
+						vars.seenCometCoins[level] = true;
+						vars.DebugOutput("Collected comet coin in stage " + level + " (" + vars.level_data[level][vars.levelindex_name] + ")");
+						shouldSplit = true;
+					}
+				}
+			}
+		}
+
+		// Cloud coins
+		if (settings["split_cloud_coins"]) {
+			IntPtr cloudCoinPtr = vars.HashmapLookup(memory, hm, current.arrayCloudCoinsIndex);
+			if (cloudCoinPtr != IntPtr.Zero) {
+				IntPtr clMeta = memory.ReadPointer(cloudCoinPtr);
+				IntPtr clData = memory.ReadPointer(clMeta + 0x8);
+				int clLen = memory.ReadValue<int>(clMeta + 0x24);
+				int readLen = clLen < 100 ? clLen : 100;
+				byte[] clBytes = memory.ReadBytes(clData, readLen * 16);
+
+				foreach (var level in vars.level_data.Keys) {
+					if (level >= readLen) continue;
+					if (!((bool)vars.level_data[level][vars.levelindex_has_cloud])) continue;
+					if (vars.seenCloudCoins[level]) continue;
+					if (!settings["split_cloud_coin_" + level]) continue;
+
+					double val = BitConverter.ToDouble(clBytes, level * 16);
+					if (val >= 1) {
+						vars.seenCloudCoins[level] = true;
+						vars.DebugOutput("Collected cloud coin in stage " + level + " (" + vars.level_data[level][vars.levelindex_name] + ")");
+						shouldSplit = true;
+					}
+				}
+			}
+		}
+
+		// Comet shards
+		if (settings["split_comet_shards"]) {
+			IntPtr shardPtr = vars.HashmapLookup(memory, hm, current.arrayCometShardIndex);
+			if (shardPtr != IntPtr.Zero) {
+				IntPtr outerMeta = memory.ReadPointer(shardPtr);
+				IntPtr outerData = memory.ReadPointer(outerMeta + 0x8);
+				int outerLen = memory.ReadValue<int>(outerMeta + 0x24);
+
+				foreach (var level in vars.level_data.Keys) {
+					if (level >= outerLen) continue;
+					if (!((bool)vars.level_data[level][vars.levelindex_has_comet])) continue;
+
+					// Check if all shards for this stage are already seen
+					bool allSeen = true;
+					for (int si = 0; si < 5; si++) {
+						if (!vars.seenCometShards[level * 5 + si]) { allSeen = false; break; }
+					}
+					if (allSeen) continue;
+
+					// Dereference inner array for this stage
+					IntPtr stageRValue = outerData + (level * 16);
+					int rtype = memory.ReadValue<int>(stageRValue + 0x0C);
+					if (rtype != 2) continue;
+
+					IntPtr innerMeta = memory.ReadPointer(stageRValue);
+					IntPtr innerData = memory.ReadPointer(innerMeta + 0x8);
+					int innerLen = memory.ReadValue<int>(innerMeta + 0x24);
+					int checkCount = 5 < innerLen ? 5 : innerLen;
+					byte[] innerBytes = memory.ReadBytes(innerData, checkCount * 16);
+
+					for (int si = 0; si < checkCount; si++) {
+						if (vars.seenCometShards[level * 5 + si]) continue;
+						if (!settings["split_comet_shard_" + vars.shardLetters[si] + "_" + level]) continue;
+
+						double val = BitConverter.ToDouble(innerBytes, si * 16);
+						if (val >= 1) {
+							vars.seenCometShards[level * 5 + si] = true;
+							vars.DebugOutput("Collected comet shard " + vars.shardLetters[si] + " in stage " + level + " (" + vars.level_data[level][vars.levelindex_name] + ")");
+							shouldSplit = true;
+						}
+					}
+				}
+			}
+		}
+
+		// Moon coins
+		if (settings["split_moons"]) {
+			IntPtr moonPtr = vars.HashmapLookup(memory, hm, current.arrayMoonCoinsIndex);
+			if (moonPtr != IntPtr.Zero) {
+				IntPtr outerMeta = memory.ReadPointer(moonPtr);
+				IntPtr outerData = memory.ReadPointer(outerMeta + 0x8);
+				int outerLen = memory.ReadValue<int>(outerMeta + 0x24);
+
+				foreach (var level in vars.level_data.Keys) {
+					if (level >= outerLen) continue;
+					int numMoons = (int)vars.level_data[level][vars.levelindex_num_moons];
+					if (numMoons <= 0) continue;
+					if (!settings["split_moons_" + level]) continue;
+
+					// Check if all moons for this stage are already seen
+					bool allSeen = true;
+					for (int mi = 0; mi < numMoons; mi++) {
+						if (!vars.seenMoonCoins[level * 5 + mi]) { allSeen = false; break; }
+					}
+					if (allSeen) continue;
+
+					// Dereference inner array for this stage
+					IntPtr stageRValue = outerData + (level * 16);
+					int rtype = memory.ReadValue<int>(stageRValue + 0x0C);
+					if (rtype != 2) continue;
+
+					IntPtr innerMeta = memory.ReadPointer(stageRValue);
+					IntPtr innerData = memory.ReadPointer(innerMeta + 0x8);
+					int innerLen = memory.ReadValue<int>(innerMeta + 0x24);
+					int checkCount = numMoons < innerLen ? numMoons : innerLen;
+					byte[] innerBytes = memory.ReadBytes(innerData, checkCount * 16);
+
+					for (int mi = 0; mi < checkCount; mi++) {
+						if (vars.seenMoonCoins[level * 5 + mi]) continue;
+						if (!settings["split_moon_" + level + "_" + mi]) continue;
+
+						double val = BitConverter.ToDouble(innerBytes, mi * 16);
+						if (val >= 1) {
+							vars.seenMoonCoins[level * 5 + mi] = true;
+							vars.DebugOutput("Collected moon " + mi + " in stage " + level + " (" + vars.level_data[level][vars.levelindex_name] + ")");
+							shouldSplit = true;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Mode 3: Split when completing a level exit for the first time, with per-level filtering.
 	if (settings["split_on_finish_level"])
 	{
 		vars.currentStageClearArrayPtr = vars.HashmapLookup(memory, new IntPtr(current.globalDataHashMap), current.arrayStageClearIndex);
