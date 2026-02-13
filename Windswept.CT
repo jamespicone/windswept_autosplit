@@ -10051,13 +10051,45 @@
 
 -- Configuration for different game versions
 local versions = {
+    ["1.1.01 Hotfix 2 (Steam)"] = {
+        globalDataHashMap = 0x1A1D450,
+        arrayStageClearIndex = 0x19B63F8,
+        arrayCometCoinIndex = 0x19B6378,
+        arrayCometShardIndex = 0x19B6918,
+        arrayMoonCoinsIndex = 0x19B7918,
+        arrayCloudCoinsIndex = 0x19B7658
+    },
+    ["1.1.01 (GOG)"] = {
+        globalDataHashMap = 0x1A26280,
+        arrayStageClearIndex = 0x19BF3E8,
+        arrayCometCoinIndex = 0x19BF338,
+        arrayCometShardIndex = 0x19BF8F8,
+        arrayMoonCoinsIndex = 0x19C08D8,
+        arrayCloudCoinsIndex = 0x19C0648
+    },
+    ["1.1.01 Hotfix (Steam)"] = {
+        globalDataHashMap = 0x1A1D450,
+        arrayStageClearIndex = 0x19B63F8,
+        arrayCometCoinIndex = 0x19B6358,
+        arrayCometShardIndex = 0x19B6938,
+        arrayMoonCoinsIndex = 0x19B7908,
+        arrayCloudCoinsIndex = 0x19B7648
+    },
+    ["1.1.01 (Steam)"] = {
+        globalDataHashMap = 0x1A1A360,
+        arrayStageClearIndex = 0x19B33A8
+    },
+    ["1.1.0 (Steam)"] = {
+        globalDataHashMap = 0x1A1A320,
+        arrayStageClearIndex = 0x19B33A8
+    },
     ["1.0.9.1 (Steam)"] = {
         globalDataHashMap = 0x1A182F0,
         arrayStageClearIndex = 0x19B1338,
-        arrayCometCoinIndex = 0x19b1298,
-        arrayCometShardIndex = 0x19b1858,
-        arrayMoonCoinsIndex = 0x19b2858,
-        arrayCloudCoinsIndex = 0x19b25b8
+        arrayCometCoinIndex = 0x19B1298,
+        arrayCometShardIndex = 0x19B1858,
+        arrayMoonCoinsIndex = 0x19B2858,
+        arrayCloudCoinsIndex = 0x19B25B8
     },
     ["1.0.9 (Steam)"] = {
         globalDataHashMap = 0x1A182F0,
@@ -10152,7 +10184,7 @@ local arrayTypes = {
 }
 
 -- Select version (change this to match your game version)
-local selectedVersion = "1.0.9.1 (Steam)"
+local selectedVersion = "1.1.01 Hotfix 2 (Steam)"
 local config = versions[selectedVersion]
 
 -- Robin Hood hashmap lookup function
